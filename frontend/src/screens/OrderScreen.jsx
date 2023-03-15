@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Col, Image, ListGroup, Row } from 'react-bootstrap'
+import { Button, Card, Col, Image, ListGroup, Row } from 'react-bootstrap'
 import { useDispatch, useSelector } from 'react-redux'
-import { Link, useParams } from 'react-router-dom'
-import { getOrderDetails, payOrder } from '../actions/orderAction'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getOrderDetails, payOrder, deliverOrder } from '../actions/orderAction'
 import Message from '../components/Message'
 import Loader from '../components/Loader'
 import { PayPalScriptProvider ,PayPalButtons } from "@paypal/react-paypal-js";
-import { ORDER_PAY_RESET } from '../constants/orderConstants'
+import { ORDER_DELIVER_RESET, ORDER_PAY_RESET } from '../constants/orderConstants'
 
 
 const OrderScreen = () => {
     const params = useParams();
     const orderId = params.id;
+
+    let navigate = useNavigate()
 
     const dispatch = useDispatch()
 
@@ -23,7 +25,13 @@ const OrderScreen = () => {
     const orderPay = useSelector(state => state.orderPay)
     const { loading: loadingPay, success: successPay } = orderPay
     
-    
+    const orderDeliver = useSelector(state => state.orderDeliver)
+    const { loading: loadingDeliver, success: successDeliver } = orderDeliver
+   
+    const userLogin = useSelector(state => state.userLogin)
+    const { userInfo } = userLogin
+
+
 
     if(!loading && !error) {
         order.itemPrice = order.orderItems.reduce((acc, item) => acc + item.price * item.qty, 0).toFixed(2)
@@ -41,8 +49,14 @@ const OrderScreen = () => {
     }
     
     useEffect(() => {
-        if(!order || successPay || order._id !== Number(orderId)) {
+        if(!userInfo) {
+            navigate('/login')
+        }
+        
+
+        if(!order || successPay || order._id !== Number(orderId) || successDeliver) {
             dispatch({ type: ORDER_PAY_RESET })
+            dispatch({ type: ORDER_DELIVER_RESET })
             dispatch(getOrderDetails(orderId))
         } else if(!order.isPaid) {
             if(!window.paypal) {
@@ -52,11 +66,15 @@ const OrderScreen = () => {
             }
         }
         
-    }, [order, orderId, dispatch, successPay])
+    }, [order, orderId, dispatch, successPay, successDeliver, navigate, userInfo])
 
 
     const successPaymentHandler = (paymentResult) => {
         dispatch(payOrder(orderId, paymentResult))
+    }
+
+    const deliverHandler = () => {
+        dispatch(deliverOrder(order))
     }
 
     return loading ? (
@@ -93,8 +111,8 @@ const OrderScreen = () => {
 
 
                             {
-                                order.isDelievered ? (
-                                    <Message variant='success'>Delivered on {order.paidAt}</Message>
+                                order.isDelivered ? (
+                                    <Message variant='success'>Delivered on {order.deliveredAt}</Message>
                                 ) : (
                                     <Message variant='warning'>Not Delivered</Message>
                                 )
@@ -215,6 +233,26 @@ const OrderScreen = () => {
                                     }
 
                                 </ListGroup>
+
+                                {
+                                    loadingDeliver && <Loader />
+                                }
+
+                                {
+                                    userInfo && userInfo.isAdmin && order.isPaid && !order.isDelivered && (
+                                        <ListGroup.Item>
+                                            <Row className='px-3'>
+                                                <Button
+                                                    type='button'
+                                                    className='btn btn-block'
+                                                    onClick={deliverHandler}
+                                                >
+                                                    Mark As Deliver
+                                                </Button>
+                                            </Row>
+                                        </ListGroup.Item>
+                                    )
+                                }
                             </Card>
                     </Col>
                 </Row>
